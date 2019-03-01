@@ -31,6 +31,7 @@ import info.androidhive.flighttickets.network.model.Price;
 import info.androidhive.flighttickets.network.model.Ticket;
 import io.reactivex.Observable;
 import io.reactivex.ObservableSource;
+import io.reactivex.Observer;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.functions.Function;
@@ -44,8 +45,9 @@ public class MainActivity extends AppCompatActivity implements TicketsAdapter.Ti
     private static final String from = "DEL";
     private static final String to = "HYD";
 
-    private CompositeDisposable disposable = new CompositeDisposable();
-    private Unbinder unbinder;
+    private CompositeDisposable disposable = new CompositeDisposable(); //for disposing All disposable together onDestroy
+
+    private Unbinder unbinder; //from butterknife
 
     private ApiService apiService;
     private TicketsAdapter mAdapter;
@@ -61,14 +63,15 @@ public class MainActivity extends AppCompatActivity implements TicketsAdapter.Ti
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        //Unbinder for using context as view root
         unbinder = ButterKnife.bind(this);
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true); //for back button
         getSupportActionBar().setTitle(from + " > " + to);
 
-        apiService = ApiClient.getClient().create(ApiService.class);
+        apiService = ApiClient.getClient().create(ApiService.class); //getting api service
 
         mAdapter = new TicketsAdapter(this, ticketsList, this);
 
@@ -120,23 +123,14 @@ public class MainActivity extends AppCompatActivity implements TicketsAdapter.Ti
                         .subscribeOn(Schedulers.io())
                         .observeOn(AndroidSchedulers.mainThread())
                         /**
-                         * Converting List<Ticket> emission to single Ticket emissions
+                         * Converting List<Ticket> Observable emission to single Observable<Ticket> Ticket emissions
                          * */
-                        .flatMap(new Function<List<Ticket>, ObservableSource<Ticket>>() {
-                            @Override
-                            public ObservableSource<Ticket> apply(List<Ticket> tickets) throws Exception {
-                                return Observable.fromIterable(tickets);
-                            }
-                        })
+                        .flatMap( Observable::fromIterable)
                         /**
                          * Fetching price on each Ticket emission
                          * */
-                        .flatMap(new Function<Ticket, ObservableSource<Ticket>>() {
-                            @Override
-                            public ObservableSource<Ticket> apply(Ticket ticket) throws Exception {
-                                return getPriceObservable(ticket);
-                            }
-                        })
+                        .flatMap(this::getPriceObservable)
+
                         .subscribeWith(new DisposableObserver<Ticket>() {
 
                             @Override
@@ -190,12 +184,11 @@ public class MainActivity extends AppCompatActivity implements TicketsAdapter.Ti
                 .toObservable()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .map(new Function<Price, Ticket>() {
-                    @Override
-                    public Ticket apply(Price price) throws Exception {
+                .map((price) -> {
+
                         ticket.setPrice(price);
                         return ticket;
-                    }
+
                 });
     }
 
